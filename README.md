@@ -99,7 +99,7 @@ override fun onSensorChanged(event: SensorEvent?) {
 
 | Inicio de la App | Simulación en Emulador | Conteo de Pasos |
 |:---:|:---:|:---:|
-| ![Inicio](screenshots/inicio.png) | ![Sensores](screenshots/sensores.png) | ![Conteo](screenshots/conteo.png) |
+| ![Inicio](0.png) | ![Sensores](1.png) | ![Conteo](2.png) |
 | *Vista inicial en espera de movimiento.* | *Manipulación manual del acelerómetro en "Virtual Sensors".* | *Actualización de la UI al detectar movimientos bruscos.* |
 
 ---

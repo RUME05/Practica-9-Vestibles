@@ -1,7 +1,7 @@
-// Módulo: app > ... > MainActivity.kt
-package com.example.practica9.presentation// <--- Pon tu paquete
+package com.example.practica9.presentation
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.Sensor
@@ -9,76 +9,78 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.* // Usa Material 3 para celular
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
+import android.util.Log
+import android.widget.TextView
+import android.widget.Toast
+import com.example.practica9.R
 
-class MainActivity : ComponentActivity(), SensorEventListener {
+// Usamos Activity estándar para evitar líos de dependencias en Wear OS básico
+class MainActivity : Activity(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
     private var stepSensor: Sensor? = null
-    private var currentSteps by mutableStateOf(0)
+
+    private var pasosSimulados = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        setContentView(R.layout.activity_main)
 
-        setContent {
-            MobileAppUI(currentSteps)
+        // 1. Permisos para API 29+ (Android 10/11 en Wear OS)
+        if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION), 1)
+        }
+
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        //stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+
+        if (stepSensor == null) {
+            // Esto saldrá si el emulador no logra simularlo ni con rutas
+            Toast.makeText(this, "Sensor de pasos no disponible", Toast.LENGTH_SHORT).show()
         }
     }
 
-    @Composable
-    fun MobileAppUI(steps: Int) {
-        val permissionLauncher = rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted -> if (isGranted) registerSensor() }
-
-        LaunchedEffect(Unit) {
-            if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
-                permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
-            } else { registerSensor() }
+    override fun onResume() {
+        super.onResume()
+        stepSensor?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
+    }
 
-        MaterialTheme {
-            Surface(modifier = Modifier.fillMaxSize()) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(16.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("App Complementaria", style = MaterialTheme.typography.headlineMedium)
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                        modifier = Modifier.size(200.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Pasos Totales", fontSize = 18.sp)
-                                Text("$steps", fontSize = 48.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                            }
-                        }
+    override fun onPause() {
+        super.onPause()
+        sensorManager.unregisterListener(this)
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
+            val x = event.values[0]
+            val y = event.values[1]
+            val z = event.values[2]
+
+            // Calculamos la magnitud total del movimiento
+            // La gravedad normal es ~9.8.
+            val magnitud = Math.sqrt((x*x + y*y + z*z).toDouble())
+
+            // Si la magnitud supera 12, significa que hubo un "sacudón" (un paso)
+            if (magnitud > 12) {
+                pasosSimulados++
+
+                // Actualizamos el texto
+                try {
+                    val textView = findViewById<TextView>(R.id.tvSteps)
+                    if (textView != null) {
+                        textView.text = "Pasos: $pasosSimulados"
                     }
+                } catch (e: Exception) {
+                    // Ignorar error
                 }
+
+                Log.d("WEAR_OS", "¡Paso detectado! Magnitud: $magnitud")
             }
         }
     }
 
-    private fun registerSensor() {
-        stepSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
-    }
-
-    override fun onSensorChanged(event: SensorEvent?) { event?.let { currentSteps = it.values[0].toInt() } }
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
